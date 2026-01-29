@@ -1,58 +1,22 @@
-const express = require("express"); 
 const jwt = require("jsonwebtoken");
-const bcrypt = require("bcryptjs");
-const Usuario = require("./models/Usuario"); // Modelo de usuario
 
-const router = express.Router();
+// Verifica que haya token
+function verificarToken(req, res, next) {
+  const authHeader = req.headers["authorization"];
+  const token = authHeader && authHeader.split(" ")[1];
 
-// registro
-router.post("/register", async (req, res, next) => {
-  try {
-    const { nombre, correo, password } = req.body;
+  if (!token) {
+    return res.status(401).json({ mensaje: "Token requerido" });
+  }
 
-    // Verificar si el usuario ya existe
-    const usuarioExistente = await Usuario.findOne({ correo });
-    if (usuarioExistente) {
-      return res.status(400).json({ error: "Usuario ya existe" });
+  jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
+    if (err) {
+      return res.status(403).json({ mensaje: "Token inválido" });
     }
 
-    // Crear nuevo usuario
-    const usuario = new Usuario({ nombre, correo, password });
-    await usuario.save();
+    req.user = user; // aquí viene id, nombre y rol
+    next();
+  });
+}
 
-    res.status(201).json({ mensaje: "Usuario creado exitosamente" });
-  } catch (err) {
-    next(err); // Pasar el error al middleware global
-  }
-});
-
-// Login 
-router.post("/login", async (req, res, next) => {
-  try {
-    const { correo, password } = req.body;
-
-    // Buscar usuario
-    const usuario = await Usuario.findOne({ correo });
-    if (!usuario) return res.status(401).json({ error: "Usuario o contraseña incorrectos" });
-
-    // Verificar contraseña
-    const esValido = await usuario.compararPassword(password);
-    if (!esValido) return res.status(401).json({ error: "Usuario o contraseña incorrectos" });
-
-    // Generar JWT
-    const token = jwt.sign(
-      {
-        id: usuario._id,
-        nombre: usuario.nombre
-      },
-      process.env.JWT_SECRET,
-      { expiresIn: "1h" } // El token expira en 1 hora
-    );
-
-    res.json({ token });
-  } catch (err) {
-    next(err); // Pasar el error al middleware global
-  }
-});
-
-module.exports = router;
+module.exports = { verificarToken};
